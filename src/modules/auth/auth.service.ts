@@ -38,10 +38,11 @@ interface UserRecord {
 
 export class AuthService {
   async register(data: RegisterInput): Promise<AuthResponse> {
-    const { name, email, password } = data;
+    const { name, password } = data;
+    const email = data.email.toLowerCase().trim();
 
     const existingUser = await query<UserRecord>(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id FROM users WHERE email = $1 AND is_active = true',
       [email]
     );
 
@@ -77,7 +78,8 @@ export class AuthService {
   }
 
   async login(data: LoginInput): Promise<AuthResponse> {
-    const { email, password } = data;
+    const { password } = data;
+    const email = data.email.toLowerCase().trim();
 
     const result = await query<UserRecord>(
       `SELECT id, name, email, password_hash, role, is_active, created_at
