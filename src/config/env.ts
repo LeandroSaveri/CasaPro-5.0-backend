@@ -1,21 +1,55 @@
-import dotenv from "dotenv";
+import { config } from 'dotenv';
 
-dotenv.config();
+config();
 
-function required(name: string): string {
-  const value = process.env[name];
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'JWT_SECRET',
+  'PORT'
+] as const;
+
+type RequiredEnvVar = typeof requiredEnvVars[number];
+
+interface EnvConfig {
+  NODE_ENV: 'development' | 'production' | 'test';
+  PORT: number;
+  DATABASE_URL: string;
+  JWT_SECRET: string;
+  JWT_EXPIRES_IN: string;
+  BCRYPT_ROUNDS: number;
+  RATE_LIMIT_WINDOW_MS: number;
+  RATE_LIMIT_MAX_REQUESTS: number;
+  CORS_ORIGIN: string;
+}
+
+function getEnvVar(key: RequiredEnvVar): string {
+  const value = process.env[key];
   if (!value) {
-    throw new Error(`❌ Missing required environment variable: ${name}`);
+    throw new Error(`Environment variable ${key} is required`);
   }
   return value;
 }
 
-export const env = {
-  NODE_ENV: process.env.NODE_ENV || "development",
-  PORT: Number(process.env.PORT) || 3000,
+function parseIntEnv(key: string, defaultValue: number): number {
+  const value = process.env[key];
+  if (!value) return defaultValue;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) {
+    throw new Error(`Environment variable ${key} must be a valid number`);
+  }
+  return parsed;
+}
 
-  DATABASE_URL: required("DATABASE_URL"),
-
-  JWT_SECRET: required("JWT_SECRET"),
-  JWT_EXPIRES_IN: "7d"
+export const env: EnvConfig = {
+  NODE_ENV: (process.env.NODE_ENV as EnvConfig['NODE_ENV']) || 'development',
+  PORT: parseIntEnv('PORT', 3000),
+  DATABASE_URL: getEnvVar('DATABASE_URL'),
+  JWT_SECRET: getEnvVar('JWT_SECRET'),
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
+  BCRYPT_ROUNDS: parseIntEnv('BCRYPT_ROUNDS', 12),
+  RATE_LIMIT_WINDOW_MS: parseIntEnv('RATE_LIMIT_WINDOW_MS', 900000),
+  RATE_LIMIT_MAX_REQUESTS: parseIntEnv('RATE_LIMIT_MAX_REQUESTS', 100),
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*'
 };
+
+export default env;
