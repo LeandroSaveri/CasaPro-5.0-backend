@@ -2,33 +2,20 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-function getOptional(name: string, defaultValue?: string): string | undefined {
+function required(name: string): string {
   const value = process.env[name];
-  if (value === undefined || value === "") {
-    return defaultValue;
+  if (!value) {
+    throw new Error(`❌ Missing required environment variable: ${name}`);
   }
   return value;
 }
 
-function getNumber(name: string, defaultValue: number): number {
-  const value = process.env[name];
-  if (!value) return defaultValue;
-
-  const parsed = Number(value);
-  if (isNaN(parsed)) {
-    console.warn(`⚠️ Environment variable ${name} is not a valid number. Using default ${defaultValue}`);
-    return defaultValue;
-  }
-
-  return parsed;
-}
-
 export const env = {
-  NODE_ENV: getOptional("NODE_ENV", "development") as string,
+  NODE_ENV: process.env.NODE_ENV || "development",
+  PORT: Number(process.env.PORT) || 3000,
 
-  PORT: getNumber("PORT", 3000),
+  DATABASE_URL: required("DATABASE_URL"),
 
-  DATABASE_URL: getOptional("DATABASE_URL"),
-
-  JWT_SECRET: getOptional("JWT_SECRET", "dev-secret-change-this") as string,
+  JWT_SECRET: required("JWT_SECRET"),
+  JWT_EXPIRES_IN: "7d"
 };
