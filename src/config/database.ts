@@ -1,4 +1,4 @@
-import { Pool, PoolClient, QueryResult } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { env } from './env';
 import logger from './logger';
 
@@ -6,8 +6,8 @@ interface DatabaseConfig {
   connectionString: string;
   ssl: boolean | { rejectUnauthorized: boolean };
   max: number;
-  idleTimeoutMillis: 30000;
-  connectionTimeoutMillis: 2000;
+  idleTimeoutMillis: number;
+  connectionTimeoutMillis: number;
 }
 
 const isProduction = env.NODE_ENV === 'production';
@@ -35,9 +35,9 @@ pool.on('remove', () => {
   logger.info('PostgreSQL client removed from pool');
 });
 
-export async function query<T = any>(
+export async function query<T extends QueryResultRow = any>(
   text: string,
-  params?: any[]
+  params?: unknown[]
 ): Promise<QueryResult<T>> {
   const start = Date.now();
   try {
@@ -53,21 +53,6 @@ export async function query<T = any>(
 
 export async function getClient(): Promise<PoolClient> {
   const client = await pool.connect();
-  const originalQuery = client.query.bind(client);
-  
-  client.query = async (...args: any[]): Promise<any> => {
-    const start = Date.now();
-    try {
-      const result = await originalQuery(...args);
-      const duration = Date.now() - start;
-      logger.debug('Client query executed', { duration, rows: result.rowCount });
-      return result;
-    } catch (error) {
-      logger.error('Client query error', { error });
-      throw error;
-    }
-  };
-
   return client;
 }
 
