@@ -1,20 +1,13 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+import app from "./app";
+import { env } from "./config/env";
+import { connectDatabase } from "./config/database";
 
-dotenv.config();
+async function bootstrap() {
+  await connectDatabase();
 
-const app = express();
+  app.listen(env.PORT, () => {
+    console.log(`🚀 CasaPro SaaS Backend running on port ${env.PORT}`);
+  });
+}
 
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.json({ message: "CasaPro Backend Running 🚀" });
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+bootstrap();
