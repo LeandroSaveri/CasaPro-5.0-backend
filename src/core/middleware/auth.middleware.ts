@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import { UnauthorizedError, ForbiddenError } from '../errors/AppError';
 import { query } from '../../config/database';
