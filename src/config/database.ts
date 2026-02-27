@@ -1,24 +1,35 @@
 import { Pool } from "pg";
 import { env } from "./env";
 
-export const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-  ssl:
-    env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
-});
+let pool: Pool | null = null;
 
-// Teste de conexão inicial (fail fast)
-export async function connectDatabase() {
+export async function connectDatabase(): Promise<void> {
+  if (!env.DATABASE_URL) {
+    console.warn("⚠️ DATABASE_URL not configured. Skipping database connection.");
+    return;
+  }
+
   try {
-    const client = await pool.connect();
-    await client.query("SELECT 1");
-    client.release();
+    pool = new Pool({
+      connectionString: env.DATABASE_URL,
+      ssl:
+        env.NODE_ENV === "production"
+          ? { rejectUnauthorized: false }
+          : false,
+    });
+
+    await pool.query("SELECT 1");
+
     console.log("✅ Database connected successfully");
   } catch (error) {
-    console.error("❌ Database connection failed");
-    console.error(error);
-    process.exit(1);
+    console.error("❌ Failed to connect to database:", error);
+    throw error;
   }
+}
+
+export function getPool(): Pool {
+  if (!pool) {
+    throw new Error("Database not initialized. Call connectDatabase() first.");
+  }
+  return pool;
 }
