@@ -4,8 +4,7 @@ config();
 
 const requiredEnvVars = [
   'DATABASE_URL',
-  'JWT_SECRET',
-  'PORT'
+  'JWT_SECRET'
 ] as const;
 
 type RequiredEnvVar = typeof requiredEnvVars[number];
@@ -19,7 +18,7 @@ interface EnvConfig {
   BCRYPT_ROUNDS: number;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
-  CORS_ORIGIN: string;
+  CORS_ORIGIN: string | string[];
 }
 
 function getEnvVar(key: RequiredEnvVar): string {
@@ -40,16 +39,28 @@ function parseIntEnv(key: string, defaultValue: number): number {
   return parsed;
 }
 
+function getCorsOrigin(): string | string[] {
+  const origin = process.env.CORS_ORIGIN;
+  if (!origin) {
+    return [
+      'https://casa-pro-5-0.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
+  }
+  return origin.split(',').map(o => o.trim());
+}
+
 export const env: EnvConfig = {
   NODE_ENV: (process.env.NODE_ENV as EnvConfig['NODE_ENV']) || 'development',
-  PORT: parseIntEnv('PORT', 3000),
+  PORT: parseInt(process.env.PORT || '3000', 10),
   DATABASE_URL: getEnvVar('DATABASE_URL'),
   JWT_SECRET: getEnvVar('JWT_SECRET'),
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   BCRYPT_ROUNDS: parseIntEnv('BCRYPT_ROUNDS', 12),
   RATE_LIMIT_WINDOW_MS: parseIntEnv('RATE_LIMIT_WINDOW_MS', 900000),
   RATE_LIMIT_MAX_REQUESTS: parseIntEnv('RATE_LIMIT_MAX_REQUESTS', 100),
-  CORS_ORIGIN: process.env.CORS_ORIGIN || '*'
+  CORS_ORIGIN: getCorsOrigin()
 };
 
 export default env;
