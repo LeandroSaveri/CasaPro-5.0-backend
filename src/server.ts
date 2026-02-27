@@ -1,98 +1,46 @@
 import app from './app';
-import { env } from './config/env';
 import logger from './config/logger';
-import { closePool, query } from './config/database';
-import http from 'http';
+import { closePool } from './config/database';
 
-const PORT = env.PORT;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 
-async function connectDatabase(): Promise<void> {
-  try {
-    await query('SELECT NOW()');
-    logger.info('Database connection established successfully');
-  } catch (error) {
-    logger.error('Failed to connect to database', { error });
-    throw error;
-  }
-}
+const server = app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`Server running on port ${PORT}`, {
+    timestamp: new Date().toISOString()
+  });
+});
 
-async function bootstrap(): Promise<void> {
-  try {
-    logger.info('Starting server bootstrap...', {
-      environment: env.NODE_ENV,
-      port: PORT
-    });
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} received. Starting graceful shutdown...`);
 
-    await connectDatabase();
+  server.close(async () => {
+    logger.info('HTTP server closed');
 
-    const server: http.Server = app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`, {
-        environment: env.NODE_ENV,
-        port: PORT,
-        timestamp: new Date().toISOString()
-      });
-    });
-
-    const gracefulShutdown = async (signal: string): Promise<void> => {
-      logger.info(`${signal} received. Starting graceful shutdown...`, {
-        signal,
-        timestamp: new Date().toISOString()
-      });
-
-      server.close(async (err) => {
-        if (err) {
-          logger.error('Error closing HTTP server', { error: err });
-        } else {
-          logger.info('HTTP server closed successfully');
-        }
-
-        try {
-          await closePool();
-          logger.info('Database connections closed successfully');
-          process.exit(0);
-        } catch (shutdownError) {
-          logger.error('Error during database shutdown', { error: shutdownError });
-          process.exit(1);
-        }
-      });
-
-      setTimeout(() => {
-        logger.error('Forced shutdown due to timeout', {
-          timeoutMs: 30000,
-          timestamp: new Date().toISOString()
-        });
-        process.exit(1);
-      }, 30000);
-    };
-
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    process.on('uncaughtException', (error: Error) => {
-      logger.error('Uncaught Exception', {
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
+    try {
+      await closePool();
+      logger.info('Database connections closed');
+      process.exit(0);
+    } catch (error) {
+      logger.error('Error during shutdown', { error });
       process.exit(1);
-    });
+    }
+  });
 
-    process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-      logger.error('Unhandled Rejection', {
-        reason,
-        promise: String(promise),
-        timestamp: new Date().toISOString()
-      });
-      process.exit(1);
-    });
-
-  } catch (error) {
-    logger.error('Bootstrap failed. Server not started.', {
-      error,
-      timestamp: new Date().toISOString()
-    });
+  setTimeout(() => {
+    logger.error('Forced shutdown due to timeout');
     process.exit(1);
-  }
-}
+  }, 30000);
+};
 
-bootstrap();
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', { error });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', { reason, promise });
+  process.exit(1);
+});
