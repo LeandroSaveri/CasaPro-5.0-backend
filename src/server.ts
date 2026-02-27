@@ -5,7 +5,7 @@ import { connectDatabase } from "./config/database";
 async function bootstrap() {
   await connectDatabase();
 
-  app.listen(env.PORT, () => {
+  app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`🚀 CasaPro SaaS Backend running on port ${env.PORT}`);
   });
 }
