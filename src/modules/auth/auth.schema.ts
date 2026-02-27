@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
+export const registerSchema = {
   body: z.object({
     name: z
       .string()
@@ -23,9 +23,9 @@ export const registerSchema = z.object({
         'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
       )
   })
-});
+};
 
-export const loginSchema = z.object({
+export const loginSchema = {
   body: z.object({
     email: z
       .string()
@@ -36,17 +36,17 @@ export const loginSchema = z.object({
       .string()
       .min(1, 'Password is required')
   })
-});
+};
 
-export const refreshTokenSchema = z.object({
+export const refreshTokenSchema = {
   body: z.object({
     refreshToken: z
       .string()
       .min(1, 'Refresh token is required')
   })
-});
+};
 
-export const changePasswordSchema = z.object({
+export const changePasswordSchema = {
   body: z.object({
     currentPassword: z
       .string()
@@ -60,9 +60,9 @@ export const changePasswordSchema = z.object({
         'New password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
       )
   })
-});
+};
 
-export const forgotPasswordSchema = z.object({
+export const forgotPasswordSchema = {
   body: z.object({
     email: z
       .string()
@@ -70,9 +70,9 @@ export const forgotPasswordSchema = z.object({
       .toLowerCase()
       .trim()
   })
-});
+};
 
-export const resetPasswordSchema = z.object({
+export const resetPasswordSchema = {
   body: z.object({
     token: z
       .string()
@@ -86,11 +86,11 @@ export const resetPasswordSchema = z.object({
         'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
       )
   })
-});
+};
 
-export type RegisterInput = z.infer<typeof registerSchema>['body'];
-export type LoginInput = z.infer<typeof loginSchema>['body'];
-export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>['body'];
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>['body'];
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>['body'];
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>['body'];
+export type RegisterInput = z.infer<typeof registerSchema.body>;
+export type LoginInput = z.infer<typeof loginSchema.body>;
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema.body>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema.body>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema.body>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema.body>;
