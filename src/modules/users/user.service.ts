@@ -1,207 +1,327 @@
 import { query, transaction } from '../../config/database';
-import { NotFoundError, ConflictError } from '../../core/errors/AppError';
+import { NotFoundError, ForbiddenError } from '../../core/errors/AppError';
 import logger from '../../config/logger';
 
-interface UserRecord {
+interface ProjectRecord {
   id: string;
+  user_id: string;
   name: string;
-  email: string;
-  role: string;
-  is_active: boolean;
+  description: string | null;
+  data: unknown;
+  thumbnail_url: string | null;
+  is_archived: boolean;
   created_at: Date;
   updated_at: Date;
-  last_login_at: Date | null;
 }
 
-interface UpdateUserData {
+interface CreateProjectData {
+  name: string;
+  description?: string;
+  data?: unknown;
+  thumbnailUrl?: string;
+}
+
+interface UpdateProjectData {
   name?: string;
-  email?: string;
+  description?: string;
+  data?: unknown;
+  thumbnailUrl?: string;
+  isArchived?: boolean;
 }
 
-interface UserListResponse {
-  users: UserRecord[];
+interface ProjectListOptions {
+  page?: number;
+  limit?: number;
+  includeArchived?: boolean;
+}
+
+interface ProjectListResponse {
+  projects: ProjectRecord[];
   total: number;
   page: number;
   totalPages: number;
 }
 
-interface UserStats {
-  totalProjects: number;
-  activeProjects: number;
-  archivedProjects: number;
-  lastActivity: Date | null;
+interface ProjectCount {
+  total: number;
+  active: number;
+  archived: number;
 }
 
-export class UserService {
-  async findAll(page: number = 1, limit: number = 10): Promise<UserListResponse> {
+export class ProjectService {
+  async findAllByUser(
+    userId: string,
+    options: ProjectListOptions = {}
+  ): Promise<ProjectListResponse> {
+    const { page = 1, limit = 10, includeArchived = false } = options;
     const offset = (page - 1) * limit;
 
-    const countResult = await query<{ count: string }>(
-      'SELECT COUNT(*) FROM users WHERE is_active = true'
-    );
+    let countQuery = 'SELECT COUNT(*) FROM projects WHERE user_id = $1';
+    let dataQuery = `SELECT id, user_id, name, description, data, thumbnail_url, is_archived, created_at, updated_at 
+                     FROM projects 
+                     WHERE user_id = $1`;
+    const queryParams: unknown[] = [userId];
+
+    if (!includeArchived) {
+      countQuery += ' AND is_archived = false';
+      dataQuery += ' AND is_archived = false';
+    }
+
+    const countResult = await query<{ count: string }>(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].count, 10);
 
-    const result = await query<UserRecord>(
-      `SELECT id, name, email, role, is_active, created_at, updated_at, last_login_at
-       FROM users
-       WHERE is_active = true
-       ORDER BY created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+    dataQuery += ' ORDER BY updated_at DESC LIMIT $2 OFFSET $3';
+    
+    const result = await query<ProjectRecord>(dataQuery, [userId, limit, offset]);
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      users: result.rows,
+      projects: result.rows,
       total,
       page,
       totalPages
     };
   }
 
-  async findById(id: string): Promise<UserRecord> {
-    const result = await query<UserRecord>(
-      `SELECT id, name, email, role, is_active, created_at, updated_at, last_login_at
-       FROM users
-       WHERE id = $1 AND is_active = true`,
-      [id]
+  async findById(id: string, userId: string, includeArchived: boolean = false): Promise<ProjectRecord> {
+    const result = await query<ProjectRecord>(
+      `SELECT id, user_id, name, description, data, thumbnail_url, is_archived, created_at, updated_at
+       FROM projects
+       WHERE id = $1
+       AND (is_archived = false OR $2 = true)`,
+      [id, includeArchived]
     );
 
     if (result.rows.length === 0) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+      throw new NotFoundError('Project not found', 'PROJECT_NOT_FOUND');
     }
 
-    const user = result.rows[0];
+    const project = result.rows[0];
 
-    if (!user) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+    if (!project) {
+      throw new NotFoundError('Project not found', 'PROJECT_NOT_FOUND');
     }
 
-    return user;
+    if (project.user_id !== userId) {
+      throw new ForbiddenError('You do not have access to this project', 'ACCESS_DENIED');
+    }
+
+    return project;
   }
 
-  async findByEmail(email: string): Promise<UserRecord | null> {
-    const result = await query<UserRecord>(
-      `SELECT id, name, email, role, is_active, created_at, updated_at, last_login_at
-       FROM users
-       WHERE email = $1 AND is_active = true`,
-      [email]
+  async create(userId: string, data: CreateProjectData): Promise<ProjectRecord> {
+    const { name, description = null, data: projectData = {}, thumbnailUrl = null } = data;
+
+    const result = await query<ProjectRecord>(
+      `INSERT INTO projects (user_id, name, description, data, thumbnail_url, is_archived)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, user_id, name, description, data, thumbnail_url, is_archived, created_at, updated_at`,
+      [userId, name, description, projectData, thumbnailUrl, false]
     );
 
-    return result.rows[0] || null;
+    const project = result.rows[0];
+
+    if (!project) {
+      throw new Error('Failed to create project');
+    }
+
+    logger.info('Project created successfully', { projectId: project.id, userId });
+
+    return project;
   }
 
-  async update(id: string, data: UpdateUserData): Promise<UserRecord> {
-    const { name, email } = data;
-
-    if (email) {
-      const existingUser = await query<{ id: string }>(
-        'SELECT id FROM users WHERE email = $1 AND id != $2 AND is_active = true',
-        [email, id]
-      );
-
-      if (existingUser.rows.length > 0) {
-        throw new ConflictError('Email already in use', 'EMAIL_EXISTS');
-      }
-    }
+  async update(
+    id: string,
+    userId: string,
+    data: UpdateProjectData
+  ): Promise<ProjectRecord> {
+    await this.findById(id, userId, true);
 
     const updates: string[] = [];
     const values: unknown[] = [];
     let paramIndex = 1;
 
-    if (name !== undefined) {
+    if (data.name !== undefined) {
       updates.push(`name = $${paramIndex}`);
-      values.push(name);
+      values.push(data.name);
       paramIndex++;
     }
 
-    if (email !== undefined) {
-      updates.push(`email = $${paramIndex}`);
-      values.push(email.toLowerCase().trim());
+    if (data.description !== undefined) {
+      updates.push(`description = $${paramIndex}`);
+      values.push(data.description);
+      paramIndex++;
+    }
+
+    if (data.data !== undefined) {
+      updates.push(`data = $${paramIndex}`);
+      values.push(data.data);
+      paramIndex++;
+    }
+
+    if (data.thumbnailUrl !== undefined) {
+      updates.push(`thumbnail_url = $${paramIndex}`);
+      values.push(data.thumbnailUrl);
+      paramIndex++;
+    }
+
+    if (data.isArchived !== undefined) {
+      updates.push(`is_archived = $${paramIndex}`);
+      values.push(data.isArchived);
       paramIndex++;
     }
 
     if (updates.length === 0) {
-      return this.findById(id);
+      return this.findById(id, userId);
     }
 
     updates.push(`updated_at = NOW()`);
     values.push(id);
+    values.push(userId);
 
-    const result = await query<UserRecord>(
-      `UPDATE users
+    const result = await query<ProjectRecord>(
+      `UPDATE projects
        SET ${updates.join(', ')}
-       WHERE id = $${paramIndex} AND is_active = true
-       RETURNING id, name, email, role, is_active, created_at, updated_at, last_login_at`,
+       WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
+       RETURNING id, user_id, name, description, data, thumbnail_url, is_archived, created_at, updated_at`,
       values
     );
 
     if (result.rows.length === 0) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+      throw new NotFoundError('Project not found or access denied', 'PROJECT_NOT_FOUND');
     }
 
-    const user = result.rows[0];
+    const project = result.rows[0];
 
-    if (!user) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+    if (!project) {
+      throw new NotFoundError('Project not found or access denied', 'PROJECT_NOT_FOUND');
     }
 
-    logger.info('User updated successfully', { userId: id });
+    logger.info('Project updated successfully', { projectId: id, userId });
 
-    return user;
+    return project;
   }
 
-  async delete(id: string): Promise<void> {
-    await transaction(async (client) => {
-      const userResult = await client.query(
-        'UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 AND is_active = true RETURNING id',
-        [id]
-      );
+  async delete(id: string, userId: string): Promise<void> {
+    const result = await query(
+      'DELETE FROM projects WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, userId]
+    );
 
-      if (userResult.rows.length === 0) {
-        throw new NotFoundError('User not found', 'USER_NOT_FOUND');
-      }
+    if (result.rows.length === 0) {
+      throw new NotFoundError('Project not found or access denied', 'PROJECT_NOT_FOUND');
+    }
 
-      await client.query(
-        'UPDATE projects SET is_archived = true WHERE user_id = $1',
-        [id]
-      );
+    logger.info('Project deleted successfully', { projectId: id, userId });
+  }
+
+  async archive(id: string, userId: string): Promise<ProjectRecord> {
+    return this.update(id, userId, { isArchived: true });
+  }
+
+  async unarchive(id: string, userId: string): Promise<ProjectRecord> {
+    return this.update(id, userId, { isArchived: false });
+  }
+
+  async duplicate(id: string, userId: string, newName?: string): Promise<ProjectRecord> {
+    const originalProject = await this.findById(id, userId);
+
+    const duplicatedName = newName || `${originalProject.name} (Copy)`;
+
+    const result = await query<ProjectRecord>(
+      `INSERT INTO projects (user_id, name, description, data, thumbnail_url, is_archived)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, user_id, name, description, data, thumbnail_url, is_archived, created_at, updated_at`,
+      [
+        userId,
+        duplicatedName,
+        originalProject.description,
+        originalProject.data,
+        originalProject.thumbnail_url,
+        false
+      ]
+    );
+
+    const duplicatedProject = result.rows[0];
+
+    if (!duplicatedProject) {
+      throw new Error('Failed to duplicate project');
+    }
+
+    logger.info('Project duplicated successfully', { 
+      originalProjectId: id, 
+      newProjectId: duplicatedProject.id, 
+      userId 
     });
 
-    logger.info('User deleted successfully', { userId: id });
+    return duplicatedProject;
   }
 
-  async getUserStats(userId: string): Promise<UserStats> {
-    const projectsResult = await query<{
-      total_projects: string;
-      active_projects: string;
-      archived_projects: string;
+  async getProjectCount(userId: string): Promise<ProjectCount> {
+    const result = await query<{
+      total: string;
+      active: string;
+      archived: string;
     }>(
       `SELECT 
-        COUNT(*) as total_projects,
-        COUNT(*) FILTER (WHERE is_archived = false) as active_projects,
-        COUNT(*) FILTER (WHERE is_archived = true) as archived_projects
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE is_archived = false) as active,
+        COUNT(*) FILTER (WHERE is_archived = true) as archived
        FROM projects
        WHERE user_id = $1`,
       [userId]
     );
 
-    const userResult = await query<{ last_login_at: Date | null }>(
-      'SELECT last_login_at FROM users WHERE id = $1',
-      [userId]
-    );
-
-    const stats = projectsResult.rows[0];
-    const user = userResult.rows[0];
+    const stats = result.rows[0];
 
     return {
-      totalProjects: parseInt(stats.total_projects, 10),
-      activeProjects: parseInt(stats.active_projects, 10),
-      archivedProjects: parseInt(stats.archived_projects, 10),
-      lastActivity: user?.last_login_at || null
+      total: parseInt(stats.total, 10),
+      active: parseInt(stats.active, 10),
+      archived: parseInt(stats.archived, 10)
+    };
+  }
+
+  async search(
+    userId: string,
+    searchTerm: string,
+    options: ProjectListOptions = {}
+  ): Promise<ProjectListResponse> {
+    const { page = 1, limit = 10, includeArchived = false } = options;
+    const offset = (page - 1) * limit;
+    const searchPattern = `%${searchTerm}%`;
+
+    let countQuery = `SELECT COUNT(*) FROM projects 
+                      WHERE user_id = $1 
+                      AND (name ILIKE $2 OR description ILIKE $2)`;
+    let dataQuery = `SELECT id, user_id, name, description, data, thumbnail_url, is_archived, created_at, updated_at 
+                     FROM projects 
+                     WHERE user_id = $1 
+                     AND (name ILIKE $2 OR description ILIKE $2)`;
+    
+    const queryParams: unknown[] = [userId, searchPattern];
+
+    if (!includeArchived) {
+      countQuery += ' AND is_archived = false';
+      dataQuery += ' AND is_archived = false';
+    }
+
+    const countResult = await query<{ count: string }>(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    dataQuery += ' ORDER BY updated_at DESC LIMIT $3 OFFSET $4';
+    
+    const result = await query<ProjectRecord>(dataQuery, [userId, searchPattern, limit, offset]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      projects: result.rows,
+      total,
+      page,
+      totalPages
     };
   }
 }
 
-export const userService = new UserService();
+export const projectService = new ProjectService();
