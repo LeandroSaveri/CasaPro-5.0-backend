@@ -1,11 +1,10 @@
-import bcrypt from 'bcrypt';
+import * as bcrypt from 'bcrypt';
 import { query, transaction } from '../../config/database';
 import { env } from '../../config/env';
 import {
   ConflictError,
   UnauthorizedError,
-  NotFoundError,
-  InternalServerError
+  NotFoundError
 } from '../../core/errors/AppError';
 import { generateToken } from '../../core/middleware/auth.middleware';
 import {
@@ -61,6 +60,10 @@ export class AuthService {
 
     const user = result.rows[0];
 
+    if (!user) {
+      throw new Error('Failed to create user');
+    }
+
     logger.info('User registered successfully', { userId: user.id, email: user.email });
 
     const token = generateToken({ userId: user.id, email: user.email });
@@ -93,6 +96,10 @@ export class AuthService {
     }
 
     const user = result.rows[0];
+
+    if (!user) {
+      throw new UnauthorizedError('Invalid credentials', 'INVALID_CREDENTIALS');
+    }
 
     if (!user.is_active) {
       throw new UnauthorizedError('Account is deactivated', 'ACCOUNT_INACTIVE');
@@ -145,6 +152,10 @@ export class AuthService {
 
     const user = result.rows[0];
 
+    if (!user) {
+      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+    }
+
     return {
       id: user.id,
       name: user.name,
@@ -168,9 +179,15 @@ export class AuthService {
       throw new NotFoundError('User not found', 'USER_NOT_FOUND');
     }
 
+    const user = userResult.rows[0];
+
+    if (!user) {
+      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+    }
+
     const isCurrentValid = await bcrypt.compare(
       currentPassword,
-      userResult.rows[0].password_hash
+      user.password_hash
     );
 
     if (!isCurrentValid) {
