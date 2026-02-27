@@ -18,13 +18,22 @@ interface UpdateUserData {
   email?: string;
 }
 
+interface UserListResponse {
+  users: UserRecord[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+interface UserStats {
+  totalProjects: number;
+  activeProjects: number;
+  archivedProjects: number;
+  lastActivity: Date | null;
+}
+
 export class UserService {
-  async findAll(page: number = 1, limit: number = 10): Promise<{
-    users: Omit<UserRecord, 'password_hash'>[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
+  async findAll(page: number = 1, limit: number = 10): Promise<UserListResponse> {
     const offset = (page - 1) * limit;
 
     const countResult = await query<{ count: string }>(
@@ -51,7 +60,7 @@ export class UserService {
     };
   }
 
-  async findById(id: string): Promise<Omit<UserRecord, 'password_hash'>> {
+  async findById(id: string): Promise<UserRecord> {
     const result = await query<UserRecord>(
       `SELECT id, name, email, role, is_active, created_at, updated_at, last_login_at
        FROM users
@@ -63,10 +72,16 @@ export class UserService {
       throw new NotFoundError('User not found', 'USER_NOT_FOUND');
     }
 
-    return result.rows[0];
+    const user = result.rows[0];
+
+    if (!user) {
+      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+    }
+
+    return user;
   }
 
-  async findByEmail(email: string): Promise<Omit<UserRecord, 'password_hash'> | null> {
+  async findByEmail(email: string): Promise<UserRecord | null> {
     const result = await query<UserRecord>(
       `SELECT id, name, email, role, is_active, created_at, updated_at, last_login_at
        FROM users
@@ -77,7 +92,7 @@ export class UserService {
     return result.rows[0] || null;
   }
 
-  async update(id: string, data: UpdateUserData): Promise<Omit<UserRecord, 'password_hash'>> {
+  async update(id: string, data: UpdateUserData): Promise<UserRecord> {
     const { name, email } = data;
 
     if (email) {
@@ -92,7 +107,7 @@ export class UserService {
     }
 
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     if (name !== undefined) {
@@ -126,9 +141,15 @@ export class UserService {
       throw new NotFoundError('User not found', 'USER_NOT_FOUND');
     }
 
+    const user = result.rows[0];
+
+    if (!user) {
+      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+    }
+
     logger.info('User updated successfully', { userId: id });
 
-    return result.rows[0];
+    return user;
   }
 
   async delete(id: string): Promise<void> {
@@ -151,16 +172,11 @@ export class UserService {
     logger.info('User deleted successfully', { userId: id });
   }
 
-  async getUserStats(userId: string): Promise<{
-    totalProjects: number;
-    activeProjects: number;
-    archivedProjects: number;
-    lastActivity: Date | null;
-  }> {
+  async getUserStats(userId: string): Promise<UserStats> {
     const projectsResult = await query<{
-      total_projects: number;
-      active_projects: number;
-      archived_projects: number;
+      total_projects: string;
+      active_projects: string;
+      archived_projects: string;
     }>(
       `SELECT 
         COUNT(*) as total_projects,
@@ -176,11 +192,14 @@ export class UserService {
       [userId]
     );
 
+    const stats = projectsResult.rows[0];
+    const user = userResult.rows[0];
+
     return {
-      totalProjects: parseInt(projectsResult.rows[0].total_projects.toString(), 10),
-      activeProjects: parseInt(projectsResult.rows[0].active_projects.toString(), 10),
-      archivedProjects: parseInt(projectsResult.rows[0].archived_projects.toString(), 10),
-      lastActivity: userResult.rows[0]?.last_login_at || null
+      totalProjects: parseInt(stats.total_projects, 10),
+      activeProjects: parseInt(stats.active_projects, 10),
+      archivedProjects: parseInt(stats.archived_projects, 10),
+      lastActivity: user?.last_login_at || null
     };
   }
 }
