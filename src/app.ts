@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
 
 import healthRouter from "./routes/health.route";
@@ -9,9 +9,11 @@ app.use(cors());
 app.use(express.json());
 
 // Root route (required for Railway health check)
-app.get("/", (req, res) => {
+app.get("/", (_req: Request, res: Response) => {
   res.status(200).json({
-    status: "CasaPro Backend Online"
+    service: "CasaPro 5.0 Backend",
+    status: "online",
+    timestamp: new Date().toISOString()
   });
 });
 
