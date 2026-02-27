@@ -2,7 +2,7 @@ import app from './app';
 import logger from './config/logger';
 import { closePool } from './config/database';
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
+const PORT = Number(process.env.PORT);
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running on port ${PORT}`, {
