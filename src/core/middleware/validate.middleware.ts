@@ -3,9 +3,9 @@ import { ZodSchema, ZodError } from 'zod';
 import { ValidationError } from '../errors/AppError';
 
 interface SchemaConfig {
-  body?: ZodSchema<any>;
-  query?: ZodSchema<any>;
-  params?: ZodSchema<any>;
+  body?: ZodSchema<unknown>;
+  query?: ZodSchema<unknown>;
+  params?: ZodSchema<unknown>;
 }
 
 export function validateRequest(schema: SchemaConfig) {
@@ -26,7 +26,7 @@ export function validateRequest(schema: SchemaConfig) {
           const errors = formatZodErrors(result.error);
           throw new ValidationError('Query validation failed', errors, 'QUERY_VALIDATION_ERROR');
         }
-        req.query = result.data;
+        req.query = result.data as Record<string, unknown>;
       }
 
       if (schema.params) {
@@ -35,7 +35,7 @@ export function validateRequest(schema: SchemaConfig) {
           const errors = formatZodErrors(result.error);
           throw new ValidationError('Params validation failed', errors, 'PARAMS_VALIDATION_ERROR');
         }
-        req.params = result.data;
+        req.params = result.data as Record<string, string>;
       }
 
       next();
