@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError, ValidationError } from './AppError';
 import logger from '../../config/logger';
+import { env } from '../../config/env';
 
 interface ErrorResponse {
   success: false;
@@ -73,7 +74,7 @@ export function errorHandler(
     });
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  if (env.NODE_ENV === 'development') {
     response.error.stack = err.stack;
   }
 
