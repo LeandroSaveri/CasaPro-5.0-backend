@@ -25,9 +25,27 @@ const updateProjectSchema = {
   })
 };
 
+const getAllProjectsSchema = {
+  query: z.object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    includeArchived: z.string().optional()
+  })
+};
+
+const searchProjectsSchema = {
+  query: z.object({
+    q: z.string().min(1),
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    includeArchived: z.string().optional()
+  })
+};
+
 router.get(
   '/',
   authenticateToken,
+  validateRequest(getAllProjectsSchema),
   projectController.getAll
 );
 
@@ -40,6 +58,7 @@ router.get(
 router.get(
   '/search',
   authenticateToken,
+  validateRequest(searchProjectsSchema),
   projectController.search
 );
 
