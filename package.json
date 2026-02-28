@@ -1,15 +1,17 @@
 {
   "name": "casapro-backend",
   "version": "5.0.0",
-  "description": "CasaPro AI Backend API",
+  "description": "CasaPro AI Backend API - SaaS Edition",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json --noEmitOnError false",
+    "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "db:migrate": "node scripts/migrate.js"
   },
-  "keywords": ["casapro", "backend", "api"],
+  "keywords": ["casapro", "backend", "api", "saas"],
   "author": "CasaPro Team",
   "license": "MIT",
   "dependencies": {
@@ -21,6 +23,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
+    "stripe": "^14.10.0",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
