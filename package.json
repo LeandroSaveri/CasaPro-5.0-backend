@@ -5,16 +5,11 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json --noEmitOnError false",
     "start": "node dist/server.js",
-    "db:migrate": "node dist/scripts/migrate.js",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [
-    "casapro",
-    "backend",
-    "api"
-  ],
+  "keywords": ["casapro", "backend", "api"],
   "author": "CasaPro Team",
   "license": "MIT",
   "dependencies": {
