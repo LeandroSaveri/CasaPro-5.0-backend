@@ -12,8 +12,8 @@ RUN apk add --no-cache python3 make g++
 # Copia arquivos de dependência
 COPY package*.json ./
 
-# Instala TODAS as dependências (incluindo devDependencies pro build)
-RUN npm ci
+# Instala TODAS as dependências (npm install funciona sem package-lock.json)
+RUN npm install
 
 # Copia o código fonte
 COPY . .
